@@ -15,32 +15,70 @@ interface SourceSummaryProps {
 
 export function SourceSummary({ iptvData }: SourceSummaryProps) {
   const [dnsStatus, setDnsStatus] = useState<DnsStatusResult>({ status: 'Checking...' });
+  const [liveChannels, setLiveChannels] = useState([]);
+  const [movies, setMovies] = useState([]);
+  const [series, setSeries] = useState([]);
 
-  useEffect(() => {
-    async function fetchDns() {
-      if (iptvData && iptvData.dataSourceUrl) {
-        // For Xtream, dataSourceUrl is host:port. For M3U, it's the full URL.
-        // The DNS check needs a base URL (scheme + host + port).
-        let urlToCheck = iptvData.dataSourceUrl;
-        if (iptvData.sourceType === 'xtream') {
-            // Ensure it has a scheme
-            if (!urlToCheck.startsWith('http://') && !urlToCheck.startsWith('https://')) {
-                urlToCheck = `http://${urlToCheck}`; // Default to http for Xtream if not specified
-            }
+  // useEffect(() => {
+  //   async function fetchDns() {
+  //     if (iptvData && iptvData.dataSourceUrl) {
+  //       // For Xtream, dataSourceUrl is host:port. For M3U, it's the full URL.
+  //       // The DNS check needs a base URL (scheme + host + port).
+  //       let urlToCheck = iptvData.dataSourceUrl;
+  //       if (iptvData.sourceType === 'xtream') {
+  //           // Ensure it has a scheme
+  //           if (!urlToCheck.startsWith('http://') && !urlToCheck.startsWith('https://')) {
+  //               urlToCheck = `http://${urlToCheck}`; // Default to http for Xtream if not specified
+  //           }
+  //       }
+
+useEffect(() => {
+  async function fetchDns() {
+    if (iptvData && iptvData.dataSourceUrl) {
+      let urlToCheck = iptvData.dataSourceUrl;
+
+      if (iptvData.sourceType === 'xtream') {
+        if (!urlToCheck.startsWith('http://') && !urlToCheck.startsWith('https://')) {
+          urlToCheck = `http://${urlToCheck}`;
         }
-        // For M3U, dataSourceUrl is already a full URL.
-        
+
+        const baseApi = `${urlToCheck}/player_api.php?username=${iptvData.accountInfo.username}&password=${iptvData.accountInfo.password}`;
+
         try {
-          const result = await checkDnsStatus(urlToCheck);
-          setDnsStatus(result);
-        } catch (error) {
-          console.error("Error fetching DNS status:", error);
-          setDnsStatus({ status: 'Error', error: error instanceof Error ? error.message : 'Unknown error' });
+          const [liveRes, vodRes, seriesRes] = await Promise.all([
+            fetch(`${baseApi}&action=get_live_streams`).then(r => r.json()),
+            fetch(`${baseApi}&action=get_vod_streams`).then(r => r.json()),
+            fetch(`${baseApi}&action=get_series`).then(r => r.json()),
+          ]);
+
+          setLiveChannels(liveRes || []);
+          setMovies(vodRes || []);
+          setSeries(seriesRes || []);
+
+        } catch (err) {
+          console.error("Failed to fetch IPTV content:", err);
         }
       }
     }
-    fetchDns();
-  }, [iptvData]);
+  }
+
+  fetchDns();
+}, [iptvData]);
+
+        
+  //       // For M3U, dataSourceUrl is already a full URL.
+        
+  //       try {
+  //         const result = await checkDnsStatus(urlToCheck);
+  //         setDnsStatus(result);
+  //       } catch (error) {
+  //         console.error("Error fetching DNS status:", error);
+  //         setDnsStatus({ status: 'Error', error: error instanceof Error ? error.message : 'Unknown error' });
+  //       }
+  //     }
+  //   }
+  //   fetchDns();
+  // }, [iptvData]);
 
   if (!iptvData) {
     return (
