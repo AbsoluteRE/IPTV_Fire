@@ -4,24 +4,15 @@
 import { summarizeIPTVContent, type SummarizeIPTVContentInput, type SummarizeIPTVContentOutput } from '@/ai/flows/summarize-iptv-content';
 import { XTREAM_CODES_URL_REGEX, M3U_URL_REGEX } from '@/lib/constants';
 
-interface SummarizeResult {
+export interface SummarizeResult {
   success: boolean;
   data?: SummarizeIPTVContentOutput;
   error?: string;
   validationErrors?: Record<string, string>;
 }
 
-// The initial state for the form, matching SummarizeResult structure
-export const initialSummarizeState: SummarizeResult = {
-  success: false,
-  data: undefined,
-  error: undefined,
-  validationErrors: undefined,
-};
-
-
 export async function handleSummarizeIPTVContent(
-  prevState: SummarizeResult, // Added prevState argument
+  prevState: SummarizeResult,
   formData: FormData
 ): Promise<SummarizeResult> {
   const sourceType = formData.get('sourceType') as 'm3u' | 'xtream';

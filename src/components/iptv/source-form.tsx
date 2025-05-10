@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { handleSummarizeIPTVContent, initialSummarizeState } from '@/app/actions'; // Import initialSummarizeState
+import { handleSummarizeIPTVContent, type SummarizeResult } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,13 @@ import { SourceSummary } from './source-summary';
 import { useIPTVSource } from '@/contexts/iptv-source-context';
 import { XTREAM_CODES_URL_REGEX, M3U_URL_REGEX } from '@/lib/constants'; // For client-side hints
 
+// The initial state for the form, matching SummarizeResult structure
+const initialSummarizeState: SummarizeResult = {
+  success: false,
+  data: undefined,
+  error: undefined,
+  validationErrors: undefined,
+};
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -156,3 +163,4 @@ export function SourceForm() {
     </form>
   );
 }
+
