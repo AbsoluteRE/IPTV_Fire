@@ -1,4 +1,3 @@
-
 'use client';
 
 import Image from 'next/image';
@@ -29,9 +28,17 @@ export function ContentCard({ title, description, imageUrl, type, dataAiHint = "
       setCurrentTitle(title);
       setIsPlayerOpen(true);
     } else {
-      // Handle case where streamUrl is not available, e.g. show details
-      alert(`Details for: ${title}`);
+      // This case should ideally not be reached if button is disabled appropriately
+      console.warn(`Play clicked for ${title} (${type}) but no streamUrl is available.`);
+      // For series, navigation to a detail page would happen here or via the Info button.
     }
+  };
+
+  const handleInfoClick = () => {
+    // Placeholder for navigating to a details page or showing more info
+    // For series, this would typically lead to an episode list.
+    // For movies, it could show extended metadata.
+    alert(`More info about: ${title} (${type})`);
   };
 
   return (
@@ -72,12 +79,20 @@ export function ContentCard({ title, description, imageUrl, type, dataAiHint = "
             size="sm" 
             className="text-primary hover:text-primary hover:bg-primary/10 flex-1 justify-start"
             onClick={handlePlayClick}
-            title={streamUrl ? `Play ${title}` : `More info about ${title}`}
-            disabled={!streamUrl && type !== 'series'} // Series might not have a direct streamUrl for the card
+            title={streamUrl ? `Play ${title}` : (type === 'series' ? `View episodes for ${title}` : `More info about ${title}`)}
+            disabled={!streamUrl && type === 'movie'} // Disable for movies without URL. For series, play button might mean "play trailer" or "first episode" if streamUrl is provided, otherwise it's effectively for info.
+                                                     // Or, more simply: disabled={!streamUrl} makes it disabled for series cards if no streamUrl (like trailer) is provided.
+                                                     // If we want the play button to only *ever* play video, then disabled={!streamUrl} is best.
           >
             <PlayCircle className="mr-2 h-4 w-4" /> Play
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" title={`More info about ${title}`}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-muted-foreground hover:text-foreground" 
+            title={`More info about ${title}`}
+            onClick={handleInfoClick}
+          >
             <Info className="h-4 w-4" />
             <span className="sr-only">More info</span>
           </Button>
