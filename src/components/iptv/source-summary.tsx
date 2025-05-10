@@ -1,14 +1,47 @@
-import type { IPTVData } from '@/types/iptv';
+// src/components/iptv/source-summary.tsx
+'use client';
+
+import type { IPTVData, DnsStatusResult } from '@/types/iptv';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ListTree, Tv, Film, CheckCircle, AlertCircle, Info, UserCircle, CalendarDays, LinkIcon } from 'lucide-react';
+import { ListTree, Tv, Film, CheckCircle, AlertCircle, Info, UserCircle, CalendarDays, LinkIcon, Wifi, WifiOff, ServerCog, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { useEffect, useState } from 'react';
+import { checkDnsStatus } from '@/app/actions';
 
 interface SourceSummaryProps {
   iptvData: IPTVData | null;
 }
 
 export function SourceSummary({ iptvData }: SourceSummaryProps) {
+  const [dnsStatus, setDnsStatus] = useState<DnsStatusResult>({ status: 'Checking...' });
+
+  useEffect(() => {
+    async function fetchDns() {
+      if (iptvData && iptvData.dataSourceUrl) {
+        // For Xtream, dataSourceUrl is host:port. For M3U, it's the full URL.
+        // The DNS check needs a base URL (scheme + host + port).
+        let urlToCheck = iptvData.dataSourceUrl;
+        if (iptvData.sourceType === 'xtream') {
+            // Ensure it has a scheme
+            if (!urlToCheck.startsWith('http://') && !urlToCheck.startsWith('https://')) {
+                urlToCheck = `http://${urlToCheck}`; // Default to http for Xtream if not specified
+            }
+        }
+        // For M3U, dataSourceUrl is already a full URL.
+        
+        try {
+          const result = await checkDnsStatus(urlToCheck);
+          setDnsStatus(result);
+        } catch (error) {
+          console.error("Error fetching DNS status:", error);
+          setDnsStatus({ status: 'Error', error: error instanceof Error ? error.message : 'Unknown error' });
+        }
+      }
+    }
+    fetchDns();
+  }, [iptvData]);
+
   if (!iptvData) {
     return (
       <Card className="bg-muted/30">
@@ -27,6 +60,24 @@ export function SourceSummary({ iptvData }: SourceSummaryProps) {
   const { accountInfo, liveChannels, movies, series, categories, sourceType, dataSourceUrl } = iptvData;
   const isActive = accountInfo?.status?.toLowerCase() === 'active';
 
+  const renderDnsStatus = () => {
+    switch (dnsStatus.status) {
+      case 'Checking...':
+        return <span className="flex items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking...</span>;
+      case 'Online':
+        return <span className="flex items-center text-sm text-green-500"><Wifi className="mr-2 h-4 w-4" /> Online ({dnsStatus.statusCode})</span>;
+      case 'Maintenance':
+        return <span className="flex items-center text-sm text-yellow-500"><ServerCog className="mr-2 h-4 w-4" /> Maintenance ({dnsStatus.statusCode})</span>;
+      case 'Offline':
+        return <span className="flex items-center text-sm text-red-500"><WifiOff className="mr-2 h-4 w-4" /> Offline {dnsStatus.statusCode ? `(${dnsStatus.statusCode})` : dnsStatus.error ? `(${dnsStatus.error})` : ''}</span>;
+      case 'Error':
+        return <span className="flex items-center text-sm text-red-500"><WifiOff className="mr-2 h-4 w-4" /> Error ({dnsStatus.error || 'Unknown'})</span>;
+      default:
+        return null;
+    }
+  };
+
+
   return (
     <Card className="shadow-lg border-primary/30 bg-card">
       <CardHeader>
@@ -36,8 +87,12 @@ export function SourceSummary({ iptvData }: SourceSummaryProps) {
           ) : <Info className="mr-3 h-7 w-7 text-blue-500" />}
           Source Details ({sourceType.toUpperCase()})
         </CardTitle>
-        <CardDescription className="flex items-center">
-          <LinkIcon className="mr-2 h-4 w-4 text-muted-foreground" /> {dataSourceUrl}
+        <CardDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs sm:text-sm">
+          <span className="flex items-center truncate" title={dataSourceUrl}>
+            <LinkIcon className="mr-2 h-4 w-4 text-muted-foreground flex-shrink-0" /> 
+            <span className="truncate">{dataSourceUrl}</span>
+          </span>
+          <span className="mt-1 sm:mt-0">{renderDnsStatus()}</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -50,13 +105,13 @@ export function SourceSummary({ iptvData }: SourceSummaryProps) {
               <p><strong className="text-foreground">Username:</strong> {accountInfo.username}</p>
               <p><strong className="text-foreground">Status:</strong> <Badge variant={isActive ? "default" : "destructive"} className={`ml-1 px-2 py-0.5 text-xs ${isActive ? 'bg-green-600 hover:bg-green-500' : 'bg-yellow-600 hover:bg-yellow-500'} text-white`}>{accountInfo.status}</Badge></p>
               {accountInfo.expiryDate && (
-                <p><strong className="text-foreground">Expires:</strong> {format(parseISO(accountInfo.expiryDate), "PPPp")}</p>
+                <p className="flex items-center"><CalendarDays className="mr-1.5 h-4 w-4 text-muted-foreground" /><strong className="text-foreground">Expires:</strong> {format(parseISO(accountInfo.expiryDate), "PPP")}</p>
               )}
               <p><strong className="text-foreground">Connections:</strong> {accountInfo.activeConnections} / {accountInfo.maxConnections}</p>
-              <p><strong className="text-foreground">Trial:</strong> {accountInfo.isTrial ? "Yes" : "No"}</p>
               {accountInfo.createdAt && (
                  <p><strong className="text-foreground">Created:</strong> {format(parseISO(accountInfo.createdAt), "PPP")}</p>
               )}
+               <p><strong className="text-foreground">Trial:</strong> {accountInfo.isTrial ? "Yes" : "No"}</p>
             </div>
           </section>
         )}

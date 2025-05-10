@@ -1,129 +1,165 @@
 // src/services/xtream-service.ts
 'use server';
 
-import type { IPTVData, IPTVAccountInfo, IPTVCategory, IPTVChannel, IPTVMovie, IPTVSeries } from '@/types/iptv';
+import type { 
+  IPTVData, 
+  IPTVAccountInfo, 
+  IPTVChannel, 
+  IPTVMovie, 
+  IPTVSeries,
+  XtreamUserInfo,
+  XtreamServerInfo
+} from '@/types/iptv';
 
-// Placeholder for actual API calls
+const DEFAULT_REQUEST_TIMEOUT = 15000; // 15 seconds
+
+async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit & { timeout?: number } = {}): Promise<Response> {
+  const { timeout = DEFAULT_REQUEST_TIMEOUT } = options;
+  
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  const response = await fetch(resource, {
+    ...options,
+    signal: controller.signal  
+  });
+  clearTimeout(id);
+  return response;
+}
+
+
 async function fetchFromXtreamAPI(apiUrl: string, params: Record<string, string>): Promise<any> {
   const fullUrl = new URL(apiUrl);
   Object.entries(params).forEach(([key, value]) => fullUrl.searchParams.append(key, value));
   
-  // In a real implementation:
-  // const response = await fetch(fullUrl.toString());
-  // if (!response.ok) throw new Error(`Xtream API request failed: ${response.statusText}`);
-  // return response.json();
-
-  // Mock responses for now:
-  if (params.action === 'get_user_info') {
-    return {
-      user_info: {
-        username: params.username, auth: 1, status: 'Active', exp_date: String(Date.now() / 1000 + 30 * 24 * 60 * 60), 
-        is_trial: "0", active_cons: "0", created_at: String(Date.now() / 1000 - 60 * 24 * 60 * 60), max_connections: "2",
-        allowed_output_formats: ["m3u8", "ts"],
-      },
-      server_info: { url: new URL(apiUrl).hostname, port: new URL(apiUrl).port, https_port: "443", server_protocol: "http", timezone: "UTC", timestamp_now: String(Date.now()/1000), time_now: new Date().toISOString()}
-    };
+  try {
+    const response = await fetchWithTimeout(fullUrl.toString());
+    if (!response.ok) {
+      // Try to parse error from Xtream if possible, otherwise use statusText
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        // Not a JSON response
+      }
+      if (errorData && errorData.user_info && errorData.user_info.message) {
+        throw new Error(`Xtream API Error: ${errorData.user_info.message} (Status: ${response.status})`);
+      }
+      throw new Error(`Xtream API request failed: ${response.statusText} (Status: ${response.status})`);
+    }
+    const data = await response.json();
+    // Xtream sometimes returns an empty array for errors instead of a proper error structure
+    if (Array.isArray(data) && params.action === 'get_user_info' && data.length === 0) {
+        throw new Error('Authentication failed or invalid user info (empty response).');
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error(`Xtream API request timed out after ${DEFAULT_REQUEST_TIMEOUT / 1000} seconds.`);
+      }
+      throw error; // Re-throw other errors (e.g., network errors, parsing errors from above)
+    }
+    throw new Error('An unknown error occurred while fetching from Xtream API.');
   }
-  if (params.action === 'get_live_categories' || params.action === 'get_vod_categories' || params.action === 'get_series_categories') {
-    const type = params.action.includes('live') ? 'live' : params.action.includes('vod') ? 'movie' : 'series';
-    return [
-      { category_id: `cat_${type}_1`, category_name: `${type.toUpperCase()} Category 1`, parent_id: 0 },
-      { category_id: `cat_${type}_2`, category_name: `${type.toUpperCase()} Category 2`, parent_id: 0 },
-    ];
-  }
-  if (params.action === 'get_live_streams') {
-    return [
-      { num: 1, name: 'Live Channel 1 HD', stream_type: 'live', stream_id: 101, stream_icon: 'https://picsum.photos/100/100?random=1&grayscale', epg_channel_id: null, added: String(Date.now()/1000), category_id: 'cat_live_1', tv_archive: 0, direct_source: '', tv_archive_duration: 0, container_extension: 'ts' },
-      { num: 2, name: 'Live Channel 2 FHD', stream_type: 'live', stream_id: 102, stream_icon: 'https://picsum.photos/100/100?random=2&grayscale', epg_channel_id: null, added: String(Date.now()/1000), category_id: 'cat_live_1', tv_archive: 0, direct_source: '', tv_archive_duration: 0, container_extension: 'ts' },
-    ];
-  }
-  if (params.action === 'get_vod_streams') {
-    return [
-      { num: 1, name: 'Awesome Movie 1', stream_type: 'movie', stream_id: 201, stream_icon: 'https://picsum.photos/200/300?random=3', rating: "8.5", rating_5based: 4.2, added: String(Date.now()/1000), category_id: 'cat_movie_1', container_extension: 'mp4', custom_sid: '', direct_source: '' },
-      { num: 2, name: 'Fantastic Movie 2', stream_type: 'movie', stream_id: 202, stream_icon: 'https://picsum.photos/200/300?random=4', rating: "7.0", rating_5based: 3.5, added: String(Date.now()/1000), category_id: 'cat_movie_1', container_extension: 'mkv', custom_sid: '', direct_source: '' },
-    ];
-  }
-   if (params.action === 'get_series') { // simplified, get_series_info for details usually
-    return [
-      { num: 1, name: 'Epic Series 1', series_id: 301, cover: 'https://picsum.photos/200/300?random=5', plot: 'An epic tale.', cast: 'Actor A, Actor B', director: 'Director X', genre: 'Adventure', releaseDate: '2023-01-01', last_modified: String(Date.now()/1000), rating: "9.0", rating_5based: 4.5, episode_run_time: "45", youtube_trailer: '', category_id: 'cat_series_1' },
-    ];
-  }
-  return []; // Default empty for other actions
 }
 
-
 export async function fetchXtreamData(apiUrl: string, username: string, password: string): Promise<IPTVData> {
-  const playerApiUrl = `${apiUrl.replace(/\/$/, '')}/player_api.php`; // Ensure correct player_api.php path
-  const serverBaseUrl = apiUrl.replace(/\/$/, ''); // Base URL for constructing stream URLs
+  const playerApiUrl = `${apiUrl.replace(/\/$/, '')}/player_api.php`;
 
-  // 1. Get User Info (includes auth check)
-  const userInfoResponse = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_user_info' });
-  if (!userInfoResponse || !userInfoResponse.user_info || userInfoResponse.user_info.auth !== 1) {
-    throw new Error(userInfoResponse?.user_info?.message || 'Authentication failed or invalid user info.');
+  // 1. Get User Info, Server Info, and main content lists (if API provides them in one go)
+  // The user spec implies that player_api.php?username=...&password=... returns all this.
+  const mainResponse = await fetchFromXtreamAPI(playerApiUrl, { username, password });
+
+  if (!mainResponse || !mainResponse.user_info || mainResponse.user_info.auth !== 1) {
+    throw new Error(mainResponse?.user_info?.message || 'Authentication failed or invalid user info.');
   }
   
+  const rawUserInfo: XtreamUserInfo = mainResponse.user_info;
+  const rawServerInfo: XtreamServerInfo = mainResponse.server_info;
+
   const accountInfo: IPTVAccountInfo = {
-    ...userInfoResponse.user_info,
-    username: userInfoResponse.user_info.username,
-    status: userInfoResponse.user_info.status,
-    expiryDate: userInfoResponse.user_info.exp_date ? new Date(parseInt(userInfoResponse.user_info.exp_date) * 1000).toISOString() : null,
-    isTrial: userInfoResponse.user_info.is_trial === "1",
-    activeConnections: parseInt(userInfoResponse.user_info.active_cons),
-    maxConnections: parseInt(userInfoResponse.user_info.max_connections),
-    createdAt: userInfoResponse.user_info.created_at ? new Date(parseInt(userInfoResponse.user_info.created_at) * 1000).toISOString() : null,
+    username: rawUserInfo.username,
+    status: rawUserInfo.status,
+    expiryDate: rawUserInfo.exp_date ? new Date(parseInt(rawUserInfo.exp_date) * 1000).toISOString() : null,
+    isTrial: rawUserInfo.is_trial === "1",
+    activeConnections: parseInt(rawUserInfo.active_cons),
+    maxConnections: parseInt(rawUserInfo.max_connections),
+    createdAt: rawUserInfo.created_at ? new Date(parseInt(rawUserInfo.created_at) * 1000).toISOString() : null,
+    rawUserInfo,
+    rawServerInfo,
   };
 
-  // 2. Fetch Categories
-  const liveCategoriesRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_live_categories' }) || [];
-  const movieCategoriesRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_vod_categories' }) || [];
-  const seriesCategoriesRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_series_categories' }) || [];
+  const streamBaseUrl = `${rawServerInfo.server_protocol || 'http'}://${rawServerInfo.url}:${rawServerInfo.port}`;
 
-  const categories: IPTVData['categories'] = {
-    live: liveCategoriesRaw.map((c: any) => ({ id: String(c.category_id), name: c.category_name, type: 'live' })),
-    movie: movieCategoriesRaw.map((c: any) => ({ id: String(c.category_id), name: c.category_name, type: 'movie' })),
-    series: seriesCategoriesRaw.map((c: any) => ({ id: String(c.category_id), name: c.category_name, type: 'series' })),
-  };
-  
-  // 3. Fetch Content (simplified: fetching all, no category filter for mock)
-  const liveChannelsRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_live_streams' }) || [];
-  const moviesRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_vod_streams' }) || [];
-  const seriesRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_series' }) || []; // This is for series list, not episodes
+  // 2. Map content from the main response
+  const rawAvailableChannels: any[] = mainResponse.available_channels || [];
+  const rawMovieData: any[] = mainResponse.vod_info || mainResponse.movie_data || []; // Some panels use vod_info
+  const rawSeriesData: any[] = mainResponse.series_info || mainResponse.series_data || []; // Some panels use series_info
 
-  const liveChannels: IPTVChannel[] = liveChannelsRaw.map((ch: any) => ({
+  const liveChannels: IPTVChannel[] = rawAvailableChannels.map((ch: any) => ({
     id: String(ch.stream_id),
     name: ch.name,
     logoUrl: ch.stream_icon || null,
-    category: String(ch.category_id), 
-    streamUrl: `${serverBaseUrl}/live/${username}/${password}/${ch.stream_id}.${ch.container_extension || 'ts'}`,
-    dataAiHint: 'tv logo'
+    category: String(ch.category_id || 'uncategorized_live'), 
+    streamUrl: `${streamBaseUrl}/live/${username}/${password}/${ch.stream_id}.${ch.container_extension || 'ts'}`,
+    dataAiHint: 'tv logo',
+    epg_channel_id: ch.epg_channel_id,
+    added: ch.added, // Keep as string timestamp
+    tv_archive: ch.tv_archive,
+    tv_archive_duration: ch.tv_archive_duration,
+    container_extension: ch.container_extension || 'ts',
   }));
 
-  const movies: IPTVMovie[] = moviesRaw.map((m: any) => ({
-    id: String(m.stream_id),
+  const movies: IPTVMovie[] = rawMovieData.map((m: any) => ({
+    id: String(m.stream_id || m.vod_id), // vod_id for some panels
     name: m.name,
-    coverImageUrl: m.stream_icon || null,
-    category: String(m.category_id),
-    streamUrl: `${serverBaseUrl}/movie/${username}/${password}/${m.stream_id}.${m.container_extension || 'mp4'}`,
+    coverImageUrl: m.stream_icon || m.cover_big || null,
+    category: String(m.category_id || 'uncategorized_movie'),
+    streamUrl: `${streamBaseUrl}/movie/${username}/${password}/${m.stream_id || m.vod_id}.${m.container_extension || 'mp4'}`,
     rating: m.rating_5based || m.rating || undefined,
-    plot: m.plot || undefined,
-    duration: m.episode_run_time || undefined, 
+    rating_5based: m.rating_5based,
+    plot: m.plot || undefined, // Often not in list, but in get_vod_info
+    cast: m.cast || undefined,
+    director: m.director || undefined,
+    genre: m.genre || undefined,
+    duration: m.info?.duration || m.episode_run_time || undefined, 
+    added: m.added, // Keep as string timestamp
+    container_extension: m.container_extension || 'mp4',
     dataAiHint: 'movie poster',
   }));
 
-  const series: IPTVSeries[] = seriesRaw.map((s: any) => ({
+  const series: IPTVSeries[] = rawSeriesData.map((s: any) => ({
     id: String(s.series_id),
     name: s.name,
-    coverImageUrl: s.cover || null,
-    category: String(s.category_id),
+    coverImageUrl: s.cover || s.cover_big || null,
+    category: String(s.category_id || 'uncategorized_series'),
     plot: s.plot || undefined,
     cast: s.cast || undefined,
     director: s.director || undefined,
     genre: s.genre || undefined,
-    releaseDate: s.releaseDate || undefined, 
+    releaseDate: s.releaseDate || s.release_date || undefined, 
     rating: s.rating_5based || s.rating || undefined,
-    seasonsCount: s.seasons?.length || undefined, 
+    rating_5based: s.rating_5based,
+    last_modified: s.last_modified, // Keep as string timestamp
+    episode_run_time: s.episode_run_time,
+    youtube_trailer: s.youtube_trailer,
+    backdrop_path: s.backdrop_path,
+    // seasonsCount can be derived if full series info is fetched later or if 'seasons' array is present.
+    // For now, it's often not in the basic series list from player_api.php root.
     dataAiHint: 'series poster',
   }));
+
+  // 3. Fetch Categories separately as they are usually not in the main dump
+  const liveCategoriesRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_live_categories' }) || [];
+  const movieCategoriesRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_vod_categories' }) || [];
+  const seriesCategoriesRaw = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_series_categories' }) || [];
+
+  const categories = {
+    live: liveCategoriesRaw.map((c: any) => ({ id: String(c.category_id), name: c.category_name, type: 'live' as const })),
+    movie: movieCategoriesRaw.map((c: any) => ({ id: String(c.category_id), name: c.category_name, type: 'movie' as const })),
+    series: seriesCategoriesRaw.map((c: any) => ({ id: String(c.category_id), name: c.category_name, type: 'series' as const })),
+  };
 
   return {
     liveChannels,
@@ -133,5 +169,8 @@ export async function fetchXtreamData(apiUrl: string, username: string, password
     accountInfo,
     sourceType: 'xtream',
     dataSourceUrl: apiUrl, // Store the original API URL (host:port)
+    rawAvailableChannels,
+    rawMovieData,
+    rawSeriesData,
   };
 }

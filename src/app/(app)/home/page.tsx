@@ -19,7 +19,7 @@ import type { IPTVMovie } from '@/types/iptv';
 
 interface ContentSectionProps {
   title: string;
-  items: IPTVMovie[]; // Use IPTVMovie type
+  items: IPTVMovie[]; 
 }
 
 function ContentSection({ title, items }: ContentSectionProps) {
@@ -41,11 +41,12 @@ function ContentSection({ title, items }: ContentSectionProps) {
       <ScrollArea className="w-full whitespace-nowrap rounded-md">
         <div className="flex w-max space-x-4 pb-4 px-1">
           {items.map((item) => (
-            <div key={item.id} className="w-[200px] md:w-[240px] lg:w-[280px] shrink-0">
+            <div key={item.id} className="w-[200px] md:w-[240px] lg:w-[280px] shrink-0 h-full">
               <ContentCard
+                itemId={item.id} // Pass item ID
                 title={item.name}
-                description={item.plot || `Rating: ${item.rating || 'N/A'}`}
-                imageUrl={item.coverImageUrl || 'https://picsum.photos/400/600?blur=2&grayscale'} // Default placeholder
+                description={item.plot || `Rating: ${item.rating_5based || item.rating || 'N/A'}`}
+                imageUrl={item.coverImageUrl || `https://picsum.photos/400/600?blur=2&grayscale&random=${item.id}`}
                 type="movie"
                 dataAiHint={item.dataAiHint || 'movie poster'}
                 streamUrl={item.streamUrl}
@@ -76,7 +77,7 @@ export default function HomePage() {
       ...prev,
       [category]: {
         ...prev[category],
-        [key]: !prev[category][key as keyof typeof prev.genre], // Added type assertion
+        [key]: !prev[category][key as keyof typeof prev.genre], 
       }
     }));
   };
@@ -112,8 +113,8 @@ export default function HomePage() {
   }
 
   // Simple sectioning for demonstration
-  const latestMovies = movies.slice(0, 10); // Assuming sorted by added date or similar
-  const popularMovies = [...movies].sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0)).slice(0, 10);
+  const latestMovies = movies.sort((a,b) => parseInt(b.added || "0") - parseInt(a.added || "0")).slice(0, 10);
+  const popularMovies = [...movies].sort((a, b) => (Number(b.rating_5based || b.rating) || 0) - (Number(a.rating_5based || a.rating) || 0)).slice(0, 10);
   const recommendedMovies = movies.length > 2 ? movies.slice(Math.max(0, movies.length - 5), movies.length -2 ) : movies;
 
 
@@ -122,7 +123,6 @@ export default function HomePage() {
       <div className="container mx-auto py-8 px-1 md:px-4">
         <div className="flex justify-between items-center mb-8 px-1">
           <h1 className="text-4xl font-bold text-primary">Movies</h1>
-          {/* Filter Dropdown - functionality needs to be fully implemented with actual data */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="lg">
@@ -141,7 +141,7 @@ export default function HomePage() {
               <DropdownMenuSeparator />
                {Object.entries(filters.year).map(([key, value]) => (
                 <DropdownMenuCheckboxItem key={key} checked={value} onCheckedChange={() => handleFilterChange('year', key)}>
-                  {key.substring(1)} {/* Remove 'y' prefix */}
+                  {key.substring(1)} 
                 </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuContent>
@@ -151,6 +151,10 @@ export default function HomePage() {
         <ContentSection title="Latest Additions" items={latestMovies} />
         <ContentSection title="Popular Movies" items={popularMovies} />
         <ContentSection title="Recommended For You" items={recommendedMovies} />
+        
+        {movies.length > 0 && (latestMovies.length === 0 || popularMovies.length === 0) && (
+            <ContentSection title="All Movies" items={movies} />
+        )}
       </div>
     </ScrollArea>
   );

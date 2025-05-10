@@ -16,24 +16,20 @@ interface SeriesCardProps {
 
 function SeriesDisplayCard({ series }: SeriesCardProps) {
   return (
-    <div className="w-[240px] md:w-[280px] lg:w-[320px] shrink-0">
+    <div className="w-[240px] md:w-[280px] lg:w-[320px] shrink-0 h-full">
        <ContentCard 
+          itemId={series.id} // Pass series ID
           title={series.name} 
           description={series.plot || `Rating: ${series.rating || 'N/A'}`} 
-          imageUrl={series.coverImageUrl || 'https://picsum.photos/400/600?blur=2&grayscale&random=s'} // Default placeholder
+          imageUrl={series.coverImageUrl || series.cover || `https://picsum.photos/400/600?blur=2&grayscale&random=${series.id}`}
           type="series" 
           dataAiHint={series.dataAiHint || 'series poster'}
-          // streamUrl might not be directly applicable for series card, maybe link to series detail page
+          // streamUrl is not applicable for a series card directly
         />
        <div className="mt-2 p-2 bg-muted/30 rounded-b-md">
         {series.seasonsCount && <Badge variant="secondary" className="mr-2">S{series.seasonsCount}</Badge>}
-        {/* Episodes viewed info would require tracking user progress, out of scope for initial load */}
-        {/* {typeof episodesViewed === 'number' && typeof totalEpisodes === 'number' && (
-          <Badge variant="outline">
-            {episodesViewed}/{totalEpisodes} viewed <Check className="ml-1 h-3 w-3 text-green-500" />
-          </Badge>
-        )} */}
         {series.genre && <Badge variant="outline">{series.genre}</Badge>}
+        {series.releaseDate && <Badge variant="outline">{new Date(series.releaseDate).getFullYear()}</Badge>}
        </div>
     </div>
   );
@@ -81,8 +77,10 @@ export default function SeriesPage() {
   }
 
   // Simple sectioning for demonstration
-  const newSeries = seriesList.slice(0, 10); // Assuming sorted by added date
-  const trendingSeries = [...seriesList].sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0)).slice(0, 10);
+  const newSeries = seriesList.slice(0, 10); // Assuming sorted by added date (last_modified)
+  const trendingSeries = [...seriesList]
+    .sort((a, b) => (Number(b.rating_5based || b.rating) || 0) - (Number(a.rating_5based || a.rating) || 0))
+    .slice(0, 10);
 
 
   return (
@@ -121,6 +119,20 @@ export default function SeriesPage() {
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
           </section>
+        )}
+        
+        {seriesList.length > 0 && (newSeries.length === 0 || trendingSeries.length === 0) && (
+             <section className="mb-10">
+             <h2 className="text-3xl font-semibold mb-6 text-foreground px-1">All Series</h2>
+              <ScrollArea className="w-full whitespace-nowrap rounded-md">
+               <div className="flex w-max space-x-4 pb-4 px-1">
+                 {seriesList.map((s) => (
+                    <SeriesDisplayCard key={s.id} series={s} />
+                 ))}
+               </div>
+               <ScrollBar orientation="horizontal" />
+             </ScrollArea>
+           </section>
         )}
       </div>
     </ScrollArea>
