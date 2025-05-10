@@ -1,0 +1,165 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useFormState, useFormStatus } from 'react-dom';
+import { handleSummarizeIPTVContent } from '@/app/actions';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Terminal, Loader2, CheckCircle2 } from 'lucide-react';
+import { SourceSummary } from './source-summary';
+import { useIPTVSource } from '@/contexts/iptv-source-context';
+import { XTREAM_CODES_URL_REGEX, M3U_URL_REGEX } from '@/lib/constants'; // For client-side hints
+
+const initialState = {
+  success: false,
+  data: undefined,
+  error: undefined,
+  validationErrors: undefined,
+};
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" className="w-full text-lg py-6" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Validating & Summarizing...
+        </>
+      ) : (
+        'Add IPTV Source'
+      )}
+    </Button>
+  );
+}
+
+export function SourceForm() {
+  const [state, formAction] = useFormState(handleSummarizeIPTVContent, initialState);
+  const [sourceType, setSourceType] = useState<'m3u' | 'xtream'>('xtream');
+  const { setSourceData, clearSourceData, sourceSummary: existingSummary } = useIPTVSource();
+
+  useEffect(() => {
+    if (state.success && state.data) {
+      setSourceData(state.data);
+    }
+    if (!state.success && state.error) {
+       // Potentially clear source if adding new fails fundamentally after a previous success
+       // For now, only setSourceData on success. Error message handles failure.
+    }
+  }, [state, setSourceData]);
+
+  const handleRemoveSource = () => {
+    clearSourceData();
+    // Optionally reset form state or show a message
+  };
+
+  if (existingSummary) {
+    return (
+      <div className="w-full max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-3xl font-bold flex items-center">
+            <CheckCircle2 className="h-8 w-8 text-green-500 mr-3" /> IPTV Source Configured
+          </CardTitle>
+          <CardDescription>
+            Your IPTV source is active. You can now explore content or manage your source.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SourceSummary summary={existingSummary} />
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleRemoveSource} variant="destructive" className="w-full">
+            Remove Source & Add New
+          </Button>
+        </CardFooter>
+      </div>
+    );
+  }
+
+  return (
+    <form action={formAction} className="space-y-8">
+      <RadioGroup
+        name="sourceType"
+        defaultValue="xtream"
+        onValueChange={(value: 'm3u' | 'xtream') => setSourceType(value)}
+        className="flex gap-4 mb-6"
+      >
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="xtream" id="xtream" />
+          <Label htmlFor="xtream" className="text-lg font-medium">Xtream Codes</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="m3u" id="m3u" />
+          <Label htmlFor="m3u" className="text-lg font-medium">M3U URL</Label>
+        </div>
+      </RadioGroup>
+
+      {sourceType === 'm3u' && (
+        <div className="space-y-4 p-6 border border-dashed border-primary/50 rounded-lg bg-primary/5">
+          <h3 className="text-xl font-semibold text-primary">M3U Playlist URL</h3>
+          <div className="space-y-2">
+            <Label htmlFor="m3uUrl">M3U/M3U8 URL</Label>
+            <Input id="m3uUrl" name="m3uUrl" placeholder="http://example.com/playlist.m3u" className="bg-input/80" />
+            {state.validationErrors?.m3uUrl && <p className="text-sm text-destructive">{state.validationErrors.m3uUrl}</p>}
+            <p className="text-xs text-muted-foreground">Example: http://site.com/playlist.m3u8 or https://site.com/list.m3u</p>
+          </div>
+        </div>
+      )}
+
+      {sourceType === 'xtream' && (
+        <div className="space-y-4 p-6 border border-dashed border-primary/50 rounded-lg bg-primary/5">
+           <h3 className="text-xl font-semibold text-primary">Xtream Codes API</h3>
+          <div className="space-y-2">
+            <Label htmlFor="xtreamApiUrl">API URL (Server)</Label>
+            <Input id="xtreamApiUrl" name="xtreamApiUrl" placeholder="http://sub.example.com:80" className="bg-input/80" />
+            {state.validationErrors?.xtreamApiUrl && <p className="text-sm text-destructive">{state.validationErrors.xtreamApiUrl}</p>}
+             <p className="text-xs text-muted-foreground">Format: http://hostname:port</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input id="username" name="username" placeholder="Your Xtream Username" className="bg-input/80" />
+              {state.validationErrors?.username && <p className="text-sm text-destructive">{state.validationErrors.username}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" name="password" type="password" placeholder="Your Xtream Password" className="bg-input/80" />
+              {state.validationErrors?.password && <p className="text-sm text-destructive">{state.validationErrors.password}</p>}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {state.validationErrors?.sourceType && <p className="text-sm text-destructive mt-2">{state.validationErrors.sourceType}</p>}
+
+      <SubmitButton />
+
+      {state.error && (
+        <Alert variant="destructive" className="mt-6">
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Error Adding Source</AlertTitle>
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
+      )}
+      {state.success && state.data && (
+         <Alert variant="default" className="mt-6 bg-green-500/10 border-green-500/50 text-green-700 dark:text-green-400">
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <AlertTitle className="text-green-700 dark:text-green-300">Source Added Successfully!</AlertTitle>
+          <AlertDescription className="text-green-600 dark:text-green-400">
+            Your IPTV source has been validated and content summary is available.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {state.success && state.data && (
+        <div className="mt-8">
+          <h3 className="text-2xl font-semibold mb-4 text-center">IPTV Content Summary</h3>
+          <SourceSummary summary={state.data} />
+        </div>
+      )}
+    </form>
+  );
+}
