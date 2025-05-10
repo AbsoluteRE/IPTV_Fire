@@ -1,7 +1,8 @@
+// src/components/iptv/source-form.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useEffect, useState, useActionState } from 'react'; // Changed import for useActionState
+import { useFormStatus } from 'react-dom';
 import { handleSummarizeIPTVContent } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,7 +38,7 @@ function SubmitButton() {
 }
 
 export function SourceForm() {
-  const [state, formAction] = useFormState(handleSummarizeIPTVContent, initialState);
+  const [state, formAction] = useActionState(handleSummarizeIPTVContent, initialState); // Changed useFormState to useActionState
   const [sourceType, setSourceType] = useState<'m3u' | 'xtream'>('xtream');
   const { setSourceData, clearSourceData, sourceSummary: existingSummary } = useIPTVSource();
 
