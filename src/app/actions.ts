@@ -1,3 +1,4 @@
+// src/app/actions.ts
 'use server';
 
 import { summarizeIPTVContent, type SummarizeIPTVContentInput, type SummarizeIPTVContentOutput } from '@/ai/flows/summarize-iptv-content';
@@ -10,7 +11,19 @@ interface SummarizeResult {
   validationErrors?: Record<string, string>;
 }
 
-export async function handleSummarizeIPTVContent(formData: FormData): Promise<SummarizeResult> {
+// The initial state for the form, matching SummarizeResult structure
+export const initialSummarizeState: SummarizeResult = {
+  success: false,
+  data: undefined,
+  error: undefined,
+  validationErrors: undefined,
+};
+
+
+export async function handleSummarizeIPTVContent(
+  prevState: SummarizeResult, // Added prevState argument
+  formData: FormData
+): Promise<SummarizeResult> {
   const sourceType = formData.get('sourceType') as 'm3u' | 'xtream';
   const m3uUrl = formData.get('m3uUrl') as string;
   const xtreamApiUrl = formData.get('xtreamApiUrl') as string;
@@ -42,12 +55,17 @@ export async function handleSummarizeIPTVContent(formData: FormData): Promise<Su
     // The prompt for summarizeIPTVContent needs to be adapted if it's to properly handle M3U.
     // Given the current AI flow:
     // We'll create a dummy summary if it's an M3U link.
+     if (Object.keys(validationErrors).length > 0) {
+        return { success: false, validationErrors, data: undefined, error: undefined };
+     }
      return {
         success: true,
         data: {
           summary: `Content from M3U URL: ${m3uUrl}. Contains various channels, movies, and series. (Detailed M3U parsing and AI summarization for M3U content is a feature enhancement).`,
           categories: ["General", "News", "Sports", "Movies (from M3U)"],
-        }
+        },
+        error: undefined,
+        validationErrors: undefined,
       };
   } else if (sourceType === 'xtream') {
     if (!xtreamApiUrl) {
@@ -69,20 +87,26 @@ export async function handleSummarizeIPTVContent(formData: FormData): Promise<Su
   }
   
   if (Object.keys(validationErrors).length > 0) {
-    return { success: false, validationErrors };
+    return { success: false, validationErrors, data: undefined, error: undefined };
   }
 
   if (!input) {
-    return { success: false, error: "Input for AI summarization could not be prepared." };
+    return { success: false, error: "Input for AI summarization could not be prepared.", data: undefined, validationErrors: undefined };
   }
 
   try {
     // The Genkit AI flow will not actually call the Xtream API.
     // It will generate a plausible summary based on the provided inputs.
     const result = await summarizeIPTVContent(input);
-    return { success: true, data: result };
+    return { success: true, data: result, error: undefined, validationErrors: undefined };
   } catch (error) {
     console.error('Error summarizing IPTV content:', error);
-    return { success: false, error: 'Failed to summarize content. The AI service might be unavailable or the provided details are incorrect.' };
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { 
+        success: false, 
+        error: `Failed to summarize content. AI service error: ${errorMessage}`,
+        data: undefined, 
+        validationErrors: undefined 
+    };
   }
 }

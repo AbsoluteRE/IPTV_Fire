@@ -1,9 +1,9 @@
 // src/components/iptv/source-form.tsx
 'use client';
 
-import { useEffect, useState, useActionState } from 'react'; // Changed import for useActionState
+import { useEffect, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { handleSummarizeIPTVContent } from '@/app/actions';
+import { handleSummarizeIPTVContent, initialSummarizeState } from '@/app/actions'; // Import initialSummarizeState
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,12 +15,6 @@ import { SourceSummary } from './source-summary';
 import { useIPTVSource } from '@/contexts/iptv-source-context';
 import { XTREAM_CODES_URL_REGEX, M3U_URL_REGEX } from '@/lib/constants'; // For client-side hints
 
-const initialState = {
-  success: false,
-  data: undefined,
-  error: undefined,
-  validationErrors: undefined,
-};
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -38,7 +32,7 @@ function SubmitButton() {
 }
 
 export function SourceForm() {
-  const [state, formAction] = useActionState(handleSummarizeIPTVContent, initialState); // Changed useFormState to useActionState
+  const [state, formAction] = useActionState(handleSummarizeIPTVContent, initialSummarizeState); 
   const [sourceType, setSourceType] = useState<'m3u' | 'xtream'>('xtream');
   const { setSourceData, clearSourceData, sourceSummary: existingSummary } = useIPTVSource();
 
@@ -46,10 +40,7 @@ export function SourceForm() {
     if (state.success && state.data) {
       setSourceData(state.data);
     }
-    if (!state.success && state.error) {
-       // Potentially clear source if adding new fails fundamentally after a previous success
-       // For now, only setSourceData on success. Error message handles failure.
-    }
+    // Removed redundant error handling here, as errors are displayed via `state.error`
   }, [state, setSourceData]);
 
   const handleRemoveSource = () => {
@@ -145,7 +136,7 @@ export function SourceForm() {
           <AlertDescription>{state.error}</AlertDescription>
         </Alert>
       )}
-      {state.success && state.data && (
+      {state.success && state.data && !existingSummary && ( // Show success only if it's a new add, not on initial load of existing summary
          <Alert variant="default" className="mt-6 bg-green-500/10 border-green-500/50 text-green-700 dark:text-green-400">
           <CheckCircle2 className="h-4 w-4 text-green-500" />
           <AlertTitle className="text-green-700 dark:text-green-300">Source Added Successfully!</AlertTitle>
@@ -155,12 +146,13 @@ export function SourceForm() {
         </Alert>
       )}
       
-      {state.success && state.data && (
+      {/* This section is redundant if existingSummary block above handles displaying the summary */}
+      {/* {state.success && state.data && (
         <div className="mt-8">
           <h3 className="text-2xl font-semibold mb-4 text-center">IPTV Content Summary</h3>
           <SourceSummary summary={state.data} />
         </div>
-      )}
+      )} */}
     </form>
   );
 }
