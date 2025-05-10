@@ -1,8 +1,10 @@
 // src/components/iptv/source-form.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import React, { useEffect, useState } from 'react';
+// Removed: import { useFormState, useFormStatus } from 'react-dom';
+// Added:
+import { useFormStatus } from 'react-dom';
 import { loadIPTVSourceAction } from '@/app/actions';
 import type { LoadIPTVSourceResult } from '@/types/iptv';
 import { Button } from '@/components/ui/button';
@@ -37,7 +39,8 @@ function SubmitButton() {
 }
 
 export function SourceForm() {
-  const [state, formAction] = useFormState(loadIPTVSourceAction, initialActionState); 
+  // Changed useFormState to React.useActionState
+  const [state, formAction] = React.useActionState(loadIPTVSourceAction, initialActionState); 
   const [sourceType, setSourceType] = useState<'m3u' | 'xtream'>('xtream');
   const { setIPTVData, clearIPTVData, iptvData: existingIPTVData, setIsFetchingContent } = useIPTVSource();
   const { pending } = useFormStatus(); // To disable form inputs while submitting
