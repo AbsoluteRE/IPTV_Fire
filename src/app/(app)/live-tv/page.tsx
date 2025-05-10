@@ -10,15 +10,25 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIPTVSource } from "@/contexts/iptv-source-context";
 import type { IPTVChannel, IPTVCategory } from "@/types/iptv";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { VideoPlayerModal } from "@/components/video/video-player-modal";
 
 export default function LiveTvPage() {
   const { iptvData, loading: contextLoading, isFetchingContent } = useIPTVSource();
+  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+  const [currentStreamUrl, setCurrentStreamUrl] = useState<string | null>(null);
+  const [currentTitle, setCurrentTitle] = useState<string | null>(null);
 
   const isLoading = contextLoading || isFetchingContent;
 
   const channels = useMemo(() => iptvData?.liveChannels || [], [iptvData]);
   const liveCategories = useMemo(() => [{id: 'all', name: 'All', type: 'live' as const}, ...(iptvData?.categories?.live || [])], [iptvData]);
+
+  const handleWatchNow = (channel: IPTVChannel) => {
+    setCurrentStreamUrl(channel.streamUrl);
+    setCurrentTitle(channel.name);
+    setIsPlayerOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -55,6 +65,7 @@ export default function LiveTvPage() {
   }
 
   return (
+    <>
     <ScrollArea className="h-full">
       <div className="container mx-auto py-8 px-1 md:px-4">
         <div className="flex justify-between items-center mb-8 px-1">
@@ -101,7 +112,7 @@ export default function LiveTvPage() {
                       )}
                     </CardContent>
                     <CardFooter className="p-2 bg-muted/30">
-                      <Button className="w-full" variant="ghost" onClick={() => alert(`Playing ${channel.name}\n${channel.streamUrl}`)}>
+                      <Button className="w-full" variant="ghost" onClick={() => handleWatchNow(channel)}>
                         <Zap className="mr-2 h-4 w-4 text-primary" /> Watch Now
                       </Button>
                     </CardFooter>
@@ -119,5 +130,12 @@ export default function LiveTvPage() {
         </Tabs>
       </div>
     </ScrollArea>
+    <VideoPlayerModal
+        isOpen={isPlayerOpen}
+        onClose={() => setIsPlayerOpen(false)}
+        streamUrl={currentStreamUrl}
+        title={currentTitle}
+      />
+    </>
   );
 }
