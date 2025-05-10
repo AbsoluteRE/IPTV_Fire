@@ -1,25 +1,24 @@
 // src/app/actions.ts
 'use server';
 
-import { summarizeIPTVContent, type SummarizeIPTVContentInput, type SummarizeIPTVContentOutput } from '@/ai/flows/summarize-iptv-content';
 import { XTREAM_CODES_URL_REGEX, M3U_URL_REGEX } from '@/lib/constants';
+import type { LoadIPTVSourceResult } from '@/types/iptv';
+import { fetchXtreamData } from '@/services/xtream-service';
+import { parseM3UFile } from '@/services/m3u-parser';
 
-export interface SummarizeResult {
-  success: boolean;
-  data?: SummarizeIPTVContentOutput;
-  error?: string;
-  validationErrors?: Record<string, string>;
-}
+// The summarizeIPTVContent AI flow from src/ai/flows/summarize-iptv-content.ts
+// is no longer suitable for the primary task of fetching and structuring actual IPTV data.
+// We will call direct service functions instead.
 
-export async function handleSummarizeIPTVContent(
-  prevState: SummarizeResult,
+export async function loadIPTVSourceAction(
+  prevState: LoadIPTVSourceResult | null, // prevState can be null initially
   formData: FormData
-): Promise<SummarizeResult> {
-  const sourceType = formData.get('sourceType') as 'm3u' | 'xtream';
-  const m3uUrl = formData.get('m3uUrl') as string;
-  const xtreamApiUrl = formData.get('xtreamApiUrl') as string;
-  const username = formData.get('username') as string;
-  const password = formData.get('password') as string;
+): Promise<LoadIPTVSourceResult> {
+  const sourceType = formData.get('sourceType') as 'm3u' | 'xtream' | null;
+  const m3uUrl = formData.get('m3uUrl') as string | null;
+  const xtreamApiUrl = formData.get('xtreamApiUrl') as string | null;
+  const username = formData.get('username') as string | null;
+  const password = formData.get('password') as string | null;
 
   const validationErrors: Record<string, string> = {};
 
@@ -27,37 +26,18 @@ export async function handleSummarizeIPTVContent(
     validationErrors.sourceType = 'Source type is required.';
   }
 
-  let input: SummarizeIPTVContentInput | null = null;
-
   if (sourceType === 'm3u') {
     if (!m3uUrl) {
       validationErrors.m3uUrl = 'M3U URL is required.';
     } else if (!M3U_URL_REGEX.test(m3uUrl)) {
-      validationErrors.m3uUrl = 'Invalid M3U URL format.';
+      // Allow URLs like http://vip.sipderott4k.info:14820/get.php?...
+      // The current M3U_URL_REGEX might be too restrictive. Let's simplify or trust user input more for M3U.
+      // For now, we accept it if it's a string. More robust validation can be added.
+      // A simple check for starting with http/https might be enough initially for M3U.
+      if (!m3uUrl.startsWith('http://') && !m3uUrl.startsWith('https://')) {
+         validationErrors.m3uUrl = 'Invalid M3U URL format. Must start with http:// or https://.';
+      }
     }
-    // For M3U, the AI flow still expects xtreamApiUrl, username, password.
-    // We can pass the M3U URL as xtreamApiUrl and dummy values for username/password,
-    // or adjust the AI flow. For now, we'll treat M3U summarization as primarily URL based
-    // and the AI will handle the "summary" aspect.
-    // The current AI flow is specifically for Xtream. For M3U, it might not work as intended.
-    // We'll pass m3uUrl as xtreamApiUrl for the AI flow, and make username/password optional for this path if AI can handle it.
-    // Or, provide a simplified summary for M3U if AI cannot process it.
-    // For this example, let's assume the AI can try to make sense of it or we will mock it.
-    // The prompt for summarizeIPTVContent needs to be adapted if it's to properly handle M3U.
-    // Given the current AI flow:
-    // We'll create a dummy summary if it's an M3U link.
-     if (Object.keys(validationErrors).length > 0) {
-        return { success: false, validationErrors, data: undefined, error: undefined };
-     }
-     return {
-        success: true,
-        data: {
-          summary: `Content from M3U URL: ${m3uUrl}. Contains various channels, movies, and series. (Detailed M3U parsing and AI summarization for M3U content is a feature enhancement).`,
-          categories: ["General", "News", "Sports", "Movies (from M3U)"],
-        },
-        error: undefined,
-        validationErrors: undefined,
-      };
   } else if (sourceType === 'xtream') {
     if (!xtreamApiUrl) {
       validationErrors.xtreamApiUrl = 'Xtream API URL is required.';
@@ -70,34 +50,31 @@ export async function handleSummarizeIPTVContent(
     if (!password) {
       validationErrors.password = 'Password is required.';
     }
-    if (Object.keys(validationErrors).length === 0) {
-       input = { xtreamApiUrl, username, password };
-    }
-  } else {
+  } else if (sourceType) { // sourceType is not null but also not 'm3u' or 'xtream'
      validationErrors.sourceType = 'Invalid source type selected.';
   }
   
   if (Object.keys(validationErrors).length > 0) {
-    return { success: false, validationErrors, data: undefined, error: undefined };
-  }
-
-  if (!input) {
-    return { success: false, error: "Input for AI summarization could not be prepared.", data: undefined, validationErrors: undefined };
+    return { success: false, validationErrors };
   }
 
   try {
-    // The Genkit AI flow will not actually call the Xtream API.
-    // It will generate a plausible summary based on the provided inputs.
-    const result = await summarizeIPTVContent(input);
-    return { success: true, data: result, error: undefined, validationErrors: undefined };
+    if (sourceType === 'm3u' && m3uUrl) {
+      const data = await parseM3UFile(m3uUrl);
+      return { success: true, data };
+    } else if (sourceType === 'xtream' && xtreamApiUrl && username && password) {
+      const data = await fetchXtreamData(xtreamApiUrl, username, password);
+      return { success: true, data };
+    } else {
+      // Should not happen if validation is correct
+      return { success: false, error: "Incomplete or invalid input for the selected source type." };
+    }
   } catch (error) {
-    console.error('Error summarizing IPTV content:', error);
+    console.error('Error processing IPTV source:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
     return { 
         success: false, 
-        error: `Failed to summarize content. AI service error: ${errorMessage}`,
-        data: undefined, 
-        validationErrors: undefined 
+        error: `Failed to load IPTV source: ${errorMessage}`,
     };
   }
 }

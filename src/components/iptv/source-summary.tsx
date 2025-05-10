@@ -1,128 +1,125 @@
-import type { SummarizeIPTVContentOutput } from '@/ai/flows/summarize-iptv-content';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { IPTVData } from '@/types/iptv';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ListTree, Tv, Film, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { ListTree, Tv, Film, CheckCircle, AlertCircle, Info, UserCircle, CalendarDays, LinkIcon } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 
 interface SourceSummaryProps {
-  summary: SummarizeIPTVContentOutput | null;
+  iptvData: IPTVData | null;
 }
 
-// Helper to parse the AI summary string for structured data (basic example)
-// In a real scenario, the AI flow should return structured data.
-// For now, we assume the summary string might contain keywords.
-const parseSummaryDetails = (summaryText: string) => {
-  const details: Record<string, string | number> = {};
-  const lines = summaryText.split(',').map(line => line.trim());
-  
-  lines.forEach(line => {
-    if (line.includes(':')) {
-      const [key, ...valueParts] = line.split(':');
-      const value = valueParts.join(':').trim();
-      details[key.trim().toLowerCase().replace(/\s+/g, '_')] = value;
-    }
-  });
-
-  // Extract counts if available
-  const channelsMatch = summaryText.match(/(\d+)\s*Chaînes/i) || summaryText.match(/Channels:\s*(\d+)/i);
-  if (channelsMatch) details.channels = parseInt(channelsMatch[1]);
-
-  const moviesMatch = summaryText.match(/(\d+)\s*Films/i) || summaryText.match(/Movies:\s*(\d+)/i);
-  if (moviesMatch) details.movies = parseInt(moviesMatch[1]);
-
-  const seriesMatch = summaryText.match(/(\d+)\s*Séries/i) || summaryText.match(/Series:\s*(\d+)/i);
-  if (seriesMatch) details.series = parseInt(seriesMatch[1]);
-
-  return details;
-};
-
-
-export function SourceSummary({ summary }: SourceSummaryProps) {
-  if (!summary) {
+export function SourceSummary({ iptvData }: SourceSummaryProps) {
+  if (!iptvData) {
     return (
       <Card className="bg-muted/30">
         <CardHeader>
           <CardTitle className="flex items-center text-xl">
-            <Info className="mr-2 h-5 w-5 text-blue-500" /> No Summary Available
+            <Info className="mr-2 h-5 w-5 text-blue-500" /> No Source Data Available
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">IPTV source summary data is not available.</p>
+          <p className="text-muted-foreground">IPTV source data is not available or has been cleared.</p>
         </CardContent>
       </Card>
     );
   }
 
-  const details = parseSummaryDetails(summary.summary);
-  const statusText = (details.statut || details.xtream_status || "Unknown").toString();
-  const isActive = statusText.toLowerCase().includes('active') || statusText.toLowerCase().includes('online');
+  const { accountInfo, liveChannels, movies, series, categories, sourceType, dataSourceUrl } = iptvData;
+  const isActive = accountInfo?.status?.toLowerCase() === 'active';
 
   return (
     <Card className="shadow-lg border-primary/30 bg-card">
       <CardHeader>
         <CardTitle className="flex items-center text-2xl font-semibold">
-          {isActive ? <CheckCircle className="mr-3 h-7 w-7 text-green-500" /> : <AlertCircle className="mr-3 h-7 w-7 text-yellow-500" />}
-          Source Status: <Badge variant={isActive ? "default" : "destructive"} className={`ml-2 px-3 py-1 text-sm ${isActive ? 'bg-green-500/80 hover:bg-green-500' : 'bg-yellow-500/80 hover:bg-yellow-500'} text-white`}>{statusText}</Badge>
+          {accountInfo ? (
+            isActive ? <CheckCircle className="mr-3 h-7 w-7 text-green-500" /> : <AlertCircle className="mr-3 h-7 w-7 text-yellow-500" />
+          ) : <Info className="mr-3 h-7 w-7 text-blue-500" />}
+          Source Details ({sourceType.toUpperCase()})
         </CardTitle>
+        <CardDescription className="flex items-center">
+          <LinkIcon className="mr-2 h-4 w-4 text-muted-foreground" /> {dataSourceUrl}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="prose prose-invert max-w-none text-muted-foreground">
-          <p className="text-lg">{summary.summary}</p>
-        </div>
-
-        {(details.expiration || details.date_d_expiration) && (
-          <p className="text-sm">
-            <strong className="text-foreground">Expiration:</strong> { (details.expiration || details.date_d_expiration).toString() }
-          </p>
+      <CardContent className="space-y-6">
+        {accountInfo && (
+          <section className="space-y-3 p-4 bg-muted/20 rounded-lg">
+            <h3 className="text-lg font-semibold flex items-center mb-2">
+              <UserCircle className="mr-2 h-5 w-5 text-primary" /> Account Information
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <p><strong className="text-foreground">Username:</strong> {accountInfo.username}</p>
+              <p><strong className="text-foreground">Status:</strong> <Badge variant={isActive ? "default" : "destructive"} className={`ml-1 px-2 py-0.5 text-xs ${isActive ? 'bg-green-600 hover:bg-green-500' : 'bg-yellow-600 hover:bg-yellow-500'} text-white`}>{accountInfo.status}</Badge></p>
+              {accountInfo.expiryDate && (
+                <p><strong className="text-foreground">Expires:</strong> {format(parseISO(accountInfo.expiryDate), "PPPp")}</p>
+              )}
+              <p><strong className="text-foreground">Connections:</strong> {accountInfo.activeConnections} / {accountInfo.maxConnections}</p>
+              <p><strong className="text-foreground">Trial:</strong> {accountInfo.isTrial ? "Yes" : "No"}</p>
+              {accountInfo.createdAt && (
+                 <p><strong className="text-foreground">Created:</strong> {format(parseISO(accountInfo.createdAt), "PPP")}</p>
+              )}
+            </div>
+          </section>
         )}
-        {(details.screens_max || details.ecrans_max) && (
-          <p className="text-sm">
-            <strong className="text-foreground">Max Connections:</strong> { (details.screens_max || details.ecrans_max).toString() }
-          </p>
-        )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-          {details.channels && (
-            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-              <Tv className="h-6 w-6 text-primary" />
+        <section className="space-y-3">
+           <h3 className="text-lg font-semibold flex items-center mb-3">
+              <ListTree className="mr-2 h-5 w-5 text-primary" /> Content Overview
+            </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg shadow-sm">
+              <Tv className="h-8 w-8 text-primary shrink-0" />
               <div>
-                <p className="text-lg font-semibold text-foreground">{details.channels}</p>
+                <p className="text-xl font-bold text-foreground">{liveChannels.length}</p>
                 <p className="text-xs text-muted-foreground">Live Channels</p>
               </div>
             </div>
-          )}
-          {details.movies && (
-             <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-              <Film className="h-6 w-6 text-primary" />
-               <div>
-                <p className="text-lg font-semibold text-foreground">{details.movies}</p>
+            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg shadow-sm">
+              <Film className="h-8 w-8 text-primary shrink-0" />
+              <div>
+                <p className="text-xl font-bold text-foreground">{movies.length}</p>
                 <p className="text-xs text-muted-foreground">Movies (VOD)</p>
               </div>
             </div>
-          )}
-          {details.series && (
-            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-              <ListTree className="h-6 w-6 text-primary" />
+            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg shadow-sm">
+              <ListTree className="h-8 w-8 text-primary shrink-0" /> {/* Icon for series */}
               <div>
-                <p className="text-lg font-semibold text-foreground">{details.series}</p>
+                <p className="text-xl font-bold text-foreground">{series.length}</p>
                 <p className="text-xs text-muted-foreground">TV Series</p>
               </div>
             </div>
-          )}
-        </div>
-        
-        {summary.categories && summary.categories.length > 0 && (
-          <div className="pt-4">
-            <h4 className="text-lg font-semibold mb-2 text-foreground">Available Categories:</h4>
-            <div className="flex flex-wrap gap-2">
-              {summary.categories.map((category, index) => (
-                <Badge key={index} variant="secondary" className="px-3 py-1 text-sm bg-accent/70 text-accent-foreground hover:bg-accent">
-                  {category}
-                </Badge>
-              ))}
-            </div>
           </div>
+        </section>
+        
+        {(categories.live.length > 0 || categories.movie.length > 0 || categories.series.length > 0) && (
+          <section className="space-y-3">
+            <h4 className="text-lg font-semibold text-foreground">Available Content Categories:</h4>
+            {categories.live.length > 0 && <CategoryList title="Live TV" items={categories.live.map(c=>c.name)} />}
+            {categories.movie.length > 0 && <CategoryList title="Movies" items={categories.movie.map(c=>c.name)} />}
+            {categories.series.length > 0 && <CategoryList title="Series" items={categories.series.map(c=>c.name)} />}
+          </section>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+interface CategoryListProps {
+  title: string;
+  items: string[];
+}
+function CategoryList({ title, items }: CategoryListProps) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <h5 className="text-md font-medium mb-1 text-primary/90">{title}:</h5>
+      <div className="flex flex-wrap gap-2">
+        {items.slice(0, 10).map((category, index) => ( // Show up to 10 categories
+          <Badge key={index} variant="secondary" className="px-2 py-1 text-xs bg-accent/70 text-accent-foreground hover:bg-accent">
+            {category}
+          </Badge>
+        ))}
+        {items.length > 10 && <Badge variant="outline">...and {items.length - 10} more</Badge>}
+      </div>
+    </div>
   );
 }

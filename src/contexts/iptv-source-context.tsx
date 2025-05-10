@@ -2,63 +2,71 @@
 'use client';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { SummarizeIPTVContentOutput } from '@/ai/flows/summarize-iptv-content';
+import type { IPTVData } from '@/types/iptv';
 
 interface IPTVSourceContextType {
   sourceConfigured: boolean;
-  sourceSummary: SummarizeIPTVContentOutput | null;
-  setSourceData: (summary: SummarizeIPTVContentOutput | null) => void;
-  clearSourceData: () => void;
-  loading: boolean;
+  iptvData: IPTVData | null;
+  setIPTVData: (data: IPTVData | null) => void;
+  clearIPTVData: () => void;
+  loading: boolean; // Indicates if context is initially loading from localStorage
+  isFetchingContent: boolean; // Indicates if new content is being fetched via action
+  setIsFetchingContent: (isFetching: boolean) => void;
 }
 
 const IPTVSourceContext = createContext<IPTVSourceContextType | undefined>(undefined);
 
 export function IPTVSourceProvider({ children }: { children: ReactNode }) {
-  const [sourceConfigured, setSourceConfigured] = useState(false);
-  const [sourceSummary, setSourceSummary] = useState<SummarizeIPTVContentOutput | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [iptvData, setIptvDataState] = useState<IPTVData | null>(null);
+  const [loading, setLoading] = useState(true); // For initial localStorage load
+  const [isFetchingContent, setIsFetchingContent] = useState(false); // For active fetching
 
   useEffect(() => {
-    const storedSummary = typeof window !== 'undefined' ? localStorage.getItem('iptvSourceSummaryRunTV') : null;
-    if (storedSummary) {
+    const storedData = typeof window !== 'undefined' ? localStorage.getItem('iptvDataRunTV') : null;
+    if (storedData) {
       try {
-        const parsedSummary: SummarizeIPTVContentOutput = JSON.parse(storedSummary);
-        setSourceSummary(parsedSummary);
-        setSourceConfigured(true);
+        const parsedData: IPTVData = JSON.parse(storedData);
+        setIptvDataState(parsedData);
       } catch (error) {
-        console.error("Failed to parse stored IPTV summary", error);
+        console.error("Failed to parse stored IPTV data", error);
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('iptvSourceSummaryRunTV');
+          localStorage.removeItem('iptvDataRunTV');
         }
       }
     }
     setLoading(false);
   }, []);
 
-  const setSourceData = useCallback((summary: SummarizeIPTVContentOutput | null) => {
-    setSourceSummary(summary);
-    setSourceConfigured(!!summary);
+  const setIPTVData = useCallback((data: IPTVData | null) => {
+    setIptvDataState(data);
     if (typeof window !== 'undefined') {
-      if (summary) {
-        localStorage.setItem('iptvSourceSummaryRunTV', JSON.stringify(summary));
+      if (data) {
+        localStorage.setItem('iptvDataRunTV', JSON.stringify(data));
       } else {
-        localStorage.removeItem('iptvSourceSummaryRunTV');
+        localStorage.removeItem('iptvDataRunTV');
       }
     }
   }, []);
 
-  const clearSourceData = useCallback(() => {
-    setSourceSummary(null);
-    setSourceConfigured(false);
+  const clearIPTVData = useCallback(() => {
+    setIptvDataState(null);
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('iptvSourceSummaryRunTV');
+      localStorage.removeItem('iptvDataRunTV');
     }
   }, []);
 
+  const sourceConfigured = !!iptvData;
 
   return (
-    <IPTVSourceContext.Provider value={{ sourceConfigured, sourceSummary, setSourceData, clearSourceData, loading }}>
+    <IPTVSourceContext.Provider value={{ 
+        sourceConfigured, 
+        iptvData, 
+        setIPTVData, 
+        clearIPTVData, 
+        loading,
+        isFetchingContent,
+        setIsFetchingContent
+    }}>
       {children}
     </IPTVSourceContext.Provider>
   );

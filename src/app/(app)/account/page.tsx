@@ -1,20 +1,22 @@
+
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { SourceSummary } from "@/components/iptv/source-summary"; 
 import { useAuth } from "@/contexts/auth-context";
 import { useIPTVSource } from "@/contexts/iptv-source-context";
-import { User, Mail, ShieldCheck, Edit3, LogOut, Trash2, Tv, CalendarDays, ListChecks, History, CreditCard } from "lucide-react";
+import { User, Mail, ShieldCheck, Edit3, LogOut, Trash2, Tv, History, CreditCard, Loader2, AlertTriangle, CalendarDays, ListChecks } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 // Mock data - replace with actual data from your backend/context
 const userProfile = {
-  name: "John Doe",
+  name: "John Doe", // This should come from auth context eventually
   email: "john.doe@example.com",
-  avatarUrl: "https://picsum.photos/200/200?grayscale", // Placeholder
+  avatarUrl: "https://picsum.photos/200/200?grayscale",
   profiles: [
     { id: '1', name: 'Main Profile', avatar: 'https://picsum.photos/100/100?random=31' },
     { id: '2', name: 'Kids', avatar: 'https://picsum.photos/100/100?random=32' },
@@ -23,7 +25,7 @@ const userProfile = {
 };
 
 const subscription = {
-  status: "Active", // "Active", "Expired", "Inactive"
+  status: "Active", 
   plan: "Premium (Zen Access)",
   expirationDate: "2024-12-31",
   isPremium: true,
@@ -31,18 +33,19 @@ const subscription = {
 
 export default function AccountPage() {
   const { logout } = useAuth();
-  const { sourceSummary } = useIPTVSource();
+  const { iptvData, loading: iptvContextLoading, isFetchingContent } = useIPTVSource();
   const router = useRouter();
 
+  const isLoadingIPTVData = iptvContextLoading || isFetchingContent;
+
   const handleLogout = () => {
-    logout(); // Auth context handles redirection
+    logout();
   };
 
   const handleDeleteAccount = () => {
     if(confirm("Are you sure you want to delete your account? This action is irreversible.")) {
-      // Mock account deletion
       console.log("Account deletion initiated for", userProfile.email);
-      logout(); // Simulate deletion by logging out
+      logout(); 
     }
   };
 
@@ -124,16 +127,21 @@ export default function AccountPage() {
           <Separator />
 
           {/* IPTV Source Info */}
-          <section>
+          <section id="iptv-source">
             <h2 className="text-2xl font-semibold mb-4 flex items-center"><Tv className="mr-3 h-6 w-6 text-primary" /> IPTV Source</h2>
-            {sourceSummary ? (
-              <div className="p-6 bg-muted/30 rounded-lg">
-                <p className="mb-2"><strong className="text-foreground">Summary:</strong> {sourceSummary.summary}</p>
-                <p><strong className="text-foreground">Categories:</strong> {sourceSummary.categories.join(', ')}</p>
+            {isLoadingIPTVData ? (
+                <div className="flex items-center justify-center p-6 border-2 border-dashed border-border rounded-lg">
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                    <p className="text-muted-foreground">Loading IPTV source details...</p>
+                </div>
+            ) : iptvData ? (
+              <div>
+                <SourceSummary iptvData={iptvData} />
                 <Button variant="outline" className="w-full mt-4" onClick={() => router.push('/add-source')}>Manage Source</Button>
               </div>
             ) : (
               <div className="text-center p-6 border-2 border-dashed border-border rounded-lg">
+                 <AlertTriangle className="mx-auto h-10 w-10 text-yellow-500 mb-3" />
                 <p className="text-muted-foreground mb-3">No IPTV source configured.</p>
                 <Button onClick={() => router.push('/add-source')}>Add IPTV Source</Button>
               </div>
@@ -152,7 +160,6 @@ export default function AccountPage() {
              </Button>
           </section>
 
-
         </CardContent>
         <CardFooter className="p-6 md:p-8 border-t flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
             <Button variant="outline" onClick={handleLogout} className="w-full sm:w-auto">
@@ -166,3 +173,4 @@ export default function AccountPage() {
     </div>
   );
 }
+

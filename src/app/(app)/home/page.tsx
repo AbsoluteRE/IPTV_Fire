@@ -1,9 +1,11 @@
+
 'use client';
 
+import React, { useMemo } from 'react';
 import { ContentCard } from '@/components/content/content-card';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Button } from '@/components/ui/button';
-import { Filter } from 'lucide-react';
+import { Filter, Loader2, AlertTriangle, Film } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -12,23 +14,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import React from 'react';
-
-const mockMovies = [
-  { id: '1', title: 'Interstellar Exploration', description: 'A journey to the edge of the universe.', imageUrl: 'https://picsum.photos/400/600?random=1', type: 'movie', dataAiHint: 'space movie' },
-  { id: '2', title: 'Cyber City Chronicles', description: 'In a neon-lit future, a detective uncovers a conspiracy.', imageUrl: 'https://picsum.photos/400/600?random=2', type: 'movie', dataAiHint: 'cyberpunk city' },
-  { id: '3', title: 'The Lost Kingdom', description: 'An adventurer seeks a mythical lost kingdom.', imageUrl: 'https://picsum.photos/400/600?random=3', type: 'movie', dataAiHint: 'fantasy landscape' },
-  { id: '4', title: 'Deep Sea Mystery', description: 'Scientists explore the Mariana Trench.', imageUrl: 'https://picsum.photos/400/600?random=4', type: 'movie', dataAiHint: 'underwater scene' },
-  { id: '5', title: 'Mountain Peak Echoes', description: 'A thrilling tale of survival on a treacherous peak.', imageUrl: 'https://picsum.photos/400/600?random=5', type: 'movie', dataAiHint: 'snowy mountain' },
-  { id: '6', title: 'Desert Mirage', description: 'Lost in the desert, a fight for survival begins.', imageUrl: 'https://picsum.photos/400/600?random=6', type: 'movie', dataAiHint: 'desert landscape' },
-];
+import { useIPTVSource } from '@/contexts/iptv-source-context';
+import type { IPTVMovie } from '@/types/iptv';
 
 interface ContentSectionProps {
   title: string;
-  items: typeof mockMovies;
+  items: IPTVMovie[]; // Use IPTVMovie type
 }
 
 function ContentSection({ title, items }: ContentSectionProps) {
+  if (items.length === 0) {
+    return (
+      <section className="mb-10">
+        <h2 className="text-3xl font-semibold mb-6 text-foreground px-1">{title}</h2>
+        <div className="text-center py-10 text-muted-foreground">
+          <Film className="mx-auto h-12 w-12 mb-4" />
+          <p className="text-lg">No movies found in this section.</p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="mb-10">
       <h2 className="text-3xl font-semibold mb-6 text-foreground px-1">{title}</h2>
@@ -36,7 +42,14 @@ function ContentSection({ title, items }: ContentSectionProps) {
         <div className="flex w-max space-x-4 pb-4 px-1">
           {items.map((item) => (
             <div key={item.id} className="w-[200px] md:w-[240px] lg:w-[280px] shrink-0">
-              <ContentCard {...item} />
+              <ContentCard
+                title={item.name}
+                description={item.plot || `Rating: ${item.rating || 'N/A'}`}
+                imageUrl={item.coverImageUrl || 'https://picsum.photos/400/600?blur=2&grayscale'} // Default placeholder
+                type="movie"
+                dataAiHint={item.dataAiHint || 'movie poster'}
+                streamUrl={item.streamUrl}
+              />
             </div>
           ))}
         </div>
@@ -47,20 +60,61 @@ function ContentSection({ title, items }: ContentSectionProps) {
 }
 
 export default function HomePage() {
-    const [filters, setFilters] = React.useState({
+  const { iptvData, loading: contextLoading, isFetchingContent } = useIPTVSource();
+  const [filters, setFilters] = React.useState({
     genre: { action: false, comedy: false, drama: false, horror: false, scifi: true },
     year: { y2023: false, y2022: true, y2021: false },
   });
+
+  const isLoading = contextLoading || isFetchingContent;
+
+  const movies = useMemo(() => iptvData?.movies || [], [iptvData]);
+  // TODO: Actual filtering logic based on movie properties and selected filters
 
   const handleFilterChange = (category: 'genre' | 'year', key: string) => {
     setFilters(prev => ({
       ...prev,
       [category]: {
         ...prev[category],
-        [key]: !prev[category][key as keyof typeof prev.genre],
+        [key]: !prev[category][key as keyof typeof prev.genre], // Added type assertion
       }
     }));
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8">
+        <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+        <p className="text-xl text-muted-foreground">Loading movies...</p>
+      </div>
+    );
+  }
+
+  if (!iptvData && !isLoading) {
+     return (
+       <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+        <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">No IPTV Source Configured</h2>
+        <p className="text-muted-foreground">Please add an IPTV source in the 'Manage Source' section to view movies.</p>
+        <Button onClick={() => window.location.href = '/add-source'} className="mt-6">Add IPTV Source</Button>
+      </div>
+    );
+  }
+
+  if (movies.length === 0 && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+        <Film className="h-16 w-16 text-muted-foreground mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">No Movies Found</h2>
+        <p className="text-muted-foreground">Your IPTV source does not seem to have any movies, or they could not be loaded.</p>
+      </div>
+    );
+  }
+
+  // Simple sectioning for demonstration
+  const latestMovies = movies.slice(0, 10); // Assuming sorted by added date or similar
+  const popularMovies = [...movies].sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0)).slice(0, 10);
+  const recommendedMovies = movies.length > 2 ? movies.slice(Math.max(0, movies.length - 5), movies.length -2 ) : movies;
 
 
   return (
@@ -68,6 +122,7 @@ export default function HomePage() {
       <div className="container mx-auto py-8 px-1 md:px-4">
         <div className="flex justify-between items-center mb-8 px-1">
           <h1 className="text-4xl font-bold text-primary">Movies</h1>
+          {/* Filter Dropdown - functionality needs to be fully implemented with actual data */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="lg">
@@ -93,9 +148,9 @@ export default function HomePage() {
           </DropdownMenu>
         </div>
 
-        <ContentSection title="Latest Additions" items={mockMovies} />
-        <ContentSection title="Popular Movies" items={[...mockMovies].reverse()} />
-        <ContentSection title="Recommended For You" items={mockMovies.slice(0,3)} />
+        <ContentSection title="Latest Additions" items={latestMovies} />
+        <ContentSection title="Popular Movies" items={popularMovies} />
+        <ContentSection title="Recommended For You" items={recommendedMovies} />
       </div>
     </ScrollArea>
   );
