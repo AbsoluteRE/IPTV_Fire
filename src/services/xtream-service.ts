@@ -33,8 +33,8 @@ async function fetchFromXtreamAPI(apiUrl: string, params: Record<string, string>
   }
   if (params.action === 'get_live_streams') {
     return [
-      { num: 1, name: 'Live Channel 1 HD', stream_type: 'live', stream_id: 101, stream_icon: 'https://picsum.photos/100/100?random=1&grayscale', epg_channel_id: null, added: String(Date.now()/1000), category_id: 'cat_live_1', tv_archive: 0, direct_source: '', tv_archive_duration: 0 },
-      { num: 2, name: 'Live Channel 2 FHD', stream_type: 'live', stream_id: 102, stream_icon: 'https://picsum.photos/100/100?random=2&grayscale', epg_channel_id: null, added: String(Date.now()/1000), category_id: 'cat_live_1', tv_archive: 0, direct_source: '', tv_archive_duration: 0 },
+      { num: 1, name: 'Live Channel 1 HD', stream_type: 'live', stream_id: 101, stream_icon: 'https://picsum.photos/100/100?random=1&grayscale', epg_channel_id: null, added: String(Date.now()/1000), category_id: 'cat_live_1', tv_archive: 0, direct_source: '', tv_archive_duration: 0, container_extension: 'ts' },
+      { num: 2, name: 'Live Channel 2 FHD', stream_type: 'live', stream_id: 102, stream_icon: 'https://picsum.photos/100/100?random=2&grayscale', epg_channel_id: null, added: String(Date.now()/1000), category_id: 'cat_live_1', tv_archive: 0, direct_source: '', tv_archive_duration: 0, container_extension: 'ts' },
     ];
   }
   if (params.action === 'get_vod_streams') {
@@ -54,6 +54,7 @@ async function fetchFromXtreamAPI(apiUrl: string, params: Record<string, string>
 
 export async function fetchXtreamData(apiUrl: string, username: string, password: string): Promise<IPTVData> {
   const playerApiUrl = `${apiUrl.replace(/\/$/, '')}/player_api.php`; // Ensure correct player_api.php path
+  const serverBaseUrl = apiUrl.replace(/\/$/, ''); // Base URL for constructing stream URLs
 
   // 1. Get User Info (includes auth check)
   const userInfoResponse = await fetchFromXtreamAPI(playerApiUrl, { username, password, action: 'get_user_info' });
@@ -92,8 +93,8 @@ export async function fetchXtreamData(apiUrl: string, username: string, password
     id: String(ch.stream_id),
     name: ch.name,
     logoUrl: ch.stream_icon || null,
-    category: String(ch.category_id), // In real app, map to category name
-    streamUrl: `${playerApiUrl.replace('/player_api.php', '')}/${params.username}/${params.password}/${ch.stream_id}.${ch.container_extension || 'ts'}`, // construct stream URL
+    category: String(ch.category_id), 
+    streamUrl: `${serverBaseUrl}/live/${username}/${password}/${ch.stream_id}.${ch.container_extension || 'ts'}`,
     dataAiHint: 'tv logo'
   }));
 
@@ -102,10 +103,10 @@ export async function fetchXtreamData(apiUrl: string, username: string, password
     name: m.name,
     coverImageUrl: m.stream_icon || null,
     category: String(m.category_id),
-    streamUrl: `${playerApiUrl.replace('/player_api.php', '')}/movie/${params.username}/${params.password}/${m.stream_id}.${m.container_extension || 'mp4'}`,
+    streamUrl: `${serverBaseUrl}/movie/${username}/${password}/${m.stream_id}.${m.container_extension || 'mp4'}`,
     rating: m.rating_5based || m.rating || undefined,
     plot: m.plot || undefined,
-    duration: m.episode_run_time || undefined, // Xtream sometimes uses this for VOD duration
+    duration: m.episode_run_time || undefined, 
     dataAiHint: 'movie poster',
   }));
 
@@ -118,10 +119,9 @@ export async function fetchXtreamData(apiUrl: string, username: string, password
     cast: s.cast || undefined,
     director: s.director || undefined,
     genre: s.genre || undefined,
-    releaseDate: s.releaseDate || undefined, // Xtream uses releaseDate
+    releaseDate: s.releaseDate || undefined, 
     rating: s.rating_5based || s.rating || undefined,
-    // seasons/episodes count typically comes from get_series_info
-    seasonsCount: s.seasons?.length || undefined, // This is a guess if seasons array is part of basic series list
+    seasonsCount: s.seasons?.length || undefined, 
     dataAiHint: 'series poster',
   }));
 
@@ -132,6 +132,6 @@ export async function fetchXtreamData(apiUrl: string, username: string, password
     categories,
     accountInfo,
     sourceType: 'xtream',
-    dataSourceUrl: apiUrl,
+    dataSourceUrl: apiUrl, // Store the original API URL (host:port)
   };
 }
